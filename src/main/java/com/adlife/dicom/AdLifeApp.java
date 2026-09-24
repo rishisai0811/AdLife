@@ -27,7 +27,13 @@ public class AdLifeApp {
     private static final Logger LOG = LoggerFactory.getLogger(AdLifeApp.class);
 
     public static void main(String[] args) {
+        if (hasArg(args, "--issuer")) { Issuer.main(args); return; }
+        if (args.length > 0 && args[0].equalsIgnoreCase("--selftest")) {
+            try { SelfTest.main(args); } catch (Exception e) { e.printStackTrace(); System.exit(2); }
+            return;
+        }
         boolean openViewer = hasArg(args, "--viewer");
+        boolean kiosk = hasArg(args, "--kiosk");
         boolean console = hasArg(args, "--console") || GraphicsEnvironment.isHeadless();
 
         final AdLifeConfig config = new AdLifeConfig();
@@ -38,6 +44,7 @@ public class AdLifeApp {
             return;
         }
 
+        teeLog(config);
         final ArchiveIndex index = new ArchiveIndex();
         index.scan(config.archiveDir());
 
@@ -55,10 +62,26 @@ public class AdLifeApp {
         }));
 
         if (!console) {
-            TraySupport tray = new TraySupport(config, servers, new Runnable() {
+            final Runnable restart = new Runnable() {
+                @Override public void run() {
+                    servers.stop();
+                    try { config.reload(); servers.start(config, index); LOG.info("Listeners restarted. {}", servers.statusText()); }
+                    catch (Exception e) { LOG.error("Restart failed: {}", e.toString(), e); }
+                }
+            };
+            final TraySupport tray = new TraySupport(config, servers, new Runnable() {
                 @Override public void run() { openViewer(config, index); }
-            });
+            }).restartWith(restart);
             tray.install();
+            if (kiosk || config.getBool("kiosk.enabled", false)) {
+                javax.swing.SwingUtilities.invokeLater(new Runnable() {
+                    @Override public void run() {
+                        new com.adlife.dicom.ui.KioskWindow(config, servers, new Runnable() {
+                            @Override public void run() { new com.adlife.dicom.ui.SettingsDialog(config, restart).setVisible(true); }
+                        }).showFullScreen();
+                    }
+                });
+            }
         }
 
         if (openViewer) openViewer(config, index);
@@ -79,6 +102,23 @@ public class AdLifeApp {
                 frame.setVisible(true);
             }
         });
+    }
+
+    /** Copies console/log output into Logs/adlife-YYYYMMDD.log for the log viewer. */
+    private static void teeLog(AdLifeConfig config) {
+        try {
+            java.io.File f = com.adlife.dicom.ui.LogViewer.appLogFile(config);
+            f.getParentFile().mkdirs();
+            final java.io.OutputStream file = new java.io.FileOutputStream(f, true);
+            final java.io.PrintStream err = System.err;
+            System.setErr(new java.io.PrintStream(new java.io.OutputStream() {
+                @Override public void write(int b) throws java.io.IOException { err.write(b); file.write(b); }
+                @Override public void write(byte[] b, int o, int l) throws java.io.IOException { err.write(b, o, l); file.write(b, o, l); }
+                @Override public void flush() throws java.io.IOException { err.flush(); file.flush(); }
+            }, true));
+        } catch (Exception e) {
+            LOG.warn("Cannot open log file: {}", e.toString());
+        }
     }
 
     private static boolean hasArg(String[] args, String want) {
