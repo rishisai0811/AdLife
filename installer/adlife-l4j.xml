@@ -1,0 +1,29 @@
+<launch4jConfig>
+  <dontWrapJar>false</dontWrapJar>
+  <headerType>gui</headerType>
+  <jar>/home/sandbox/AdLife/target/AdLife.jar</jar>
+  <outfile>/home/sandbox/installer/stage/app/AdLife.exe</outfile>
+  <errTitle>AdLife DICOM Workstation</errTitle>
+  <cmdLine></cmdLine>
+  <chdir>.</chdir>
+  <priority>normal</priority>
+  <stayAlive>false</stayAlive>
+  <restartOnCrash>false</restartOnCrash>
+  <jre>
+    <path>jre</path>
+    <minVersion>1.8.0</minVersion>
+    <jdkPreference>preferJre</jdkPreference>
+  </jre>
+  <versionInfo>
+    <fileVersion>1.2.0.0</fileVersion>
+    <txtFileVersion>1.2</txtFileVersion>
+    <fileDescription>AdLife DICOM Workstation</fileDescription>
+    <copyright>Rishi K</copyright>
+    <productName>AdLife</productName>
+    <productVersion>1.2.0.0</productVersion>
+    <txtProductVersion>1.2</txtProductVersion>
+    <companyName>AdLife</companyName>
+    <internalName>AdLife</internalName>
+    <originalFilename>AdLife.exe</originalFilename>
+  </versionInfo>
+</launch4jConfig>
