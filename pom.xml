@@ -82,6 +82,11 @@
       <version>1.4.0</version>
     </dependency>
     <dependency>
+      <groupId>com.google.zxing</groupId>
+      <artifactId>core</artifactId>
+      <version>3.3.3</version>
+    </dependency>
+    <dependency>
       <groupId>org.apache.pdfbox</groupId>
       <artifactId>pdfbox</artifactId>
       <version>1.8.17</version>
