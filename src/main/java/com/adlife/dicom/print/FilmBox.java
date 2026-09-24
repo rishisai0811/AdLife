@@ -1,5 +1,8 @@
 package com.adlife.dicom.print;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import org.dcm4che3.data.Attributes;
 
 /** One film sheet under construction: box-level attributes plus per-cell image data. */
@@ -11,6 +14,7 @@ public class FilmBox {
     public final String[] imageBoxUIDs;      // cells, position-1 == index 0
     public final Attributes[] imageData;     // N-SET data per cell
     public String presentationLutUID;        // referenced Presentation LUT instance, or null
+    public final Map<Integer, String> annotations = new LinkedHashMap<Integer, String>(); // position -> text
 
     public FilmBox(String boxUID, String sessionUID, boolean color, Attributes attrs,
                    String[] imageBoxUIDs, String presentationLutUID) {

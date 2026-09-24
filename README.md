@@ -71,21 +71,17 @@ java -jar target/AdLife.jar --console  # headless/console logging
    - add named DICOM destinations for viewer Send and C-MOVE.
 4. Restart AdLife to apply.
 
-## v0.1 limits (honest list)
+## v1.0 limits (honest list)
 
-- Compressed (JPEG/RLE) pixel data is not decoded yet; print traffic from
-  modalities is uncompressed, so printing is unaffected - this only limits
-  viewing some archived studies.
-- Presentation LUT *sequences* are accepted but only IDENTITY / LIN OD shapes
-  are applied (sequence application is approximate).
-- Min/Max Density calibration and annotation text rendering are not applied.
-- No TLS on DICOM associations (XP-era cipher support); run on a trusted LAN.
-
-## Roadmap
-
-- ImageIO-based codec support for compressed studies in the viewer
-- Full Presentation LUT sequence application + density calibration
-- Windows service wrapper + exe launcher (launch4j)
-- Auto WhatsApp share of the PDF folder
-
-License: TBD (private).
+- Compressed pixel data is decoded in the viewer and on film: RLE, JPEG baseline
+  8-bit, JPEG lossless (8/12/16-bit), JPEG-LS lossless and near-lossless, and
+  JPEG 2000 (lossless and lossy) are all supported with pure-Java decoders.
+  Two compressed formats are not decoded yet (clear error instead of an image):
+  JPEG extended sequential 12-bit (1.2.840.10008.1.2.4.51 - no pure-Java decoder
+  exists and the XP SP3 floor forbids native libraries) and JPEG-LS with
+  sample-interleaved color images (rare; grayscale JPEG-LS works fully).
+- Presentation LUT sequences (LUT descriptor + LUT data) are applied on film and
+  in the viewer; Min/Max Density calibration is applied on film; annotation box
+  text is rendered at its film box position.
+- TLS on DICOM associations is supported but off by default (dicom.tls=true,
+  requires a Java keystore). Default deployments stay on a trusted LAN.

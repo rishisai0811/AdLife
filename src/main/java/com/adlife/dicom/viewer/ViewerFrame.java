@@ -173,6 +173,11 @@ public class ViewerFrame extends JFrame {
                 Attributes ds;
                 try {
                     ds = dis.readDataset(-1, -1);
+                    Attributes fmi = dis.getFileMetaInformation();
+                    String ts = fmi != null ? fmi.getString(Tag.TransferSyntaxUID)
+                            : org.dcm4che3.data.UID.ImplicitVRLittleEndian;
+                    ds.setString(com.adlife.dicom.imaging.Codecs.TAG_TRANSFER_SYNTAX,
+                            org.dcm4che3.data.VR.LO, ts);
                 } finally {
                     dis.close();
                 }

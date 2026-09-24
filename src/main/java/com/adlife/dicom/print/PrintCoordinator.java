@@ -36,6 +36,17 @@ public class PrintCoordinator implements PrintScp.PrintJobHandler {
         this.listenerLutProfile = listenerLutProfile;
     }
 
+    /** Min/Max Density (hundredths of OD) from the film box, as {minOD, maxOD}, or null. */
+    private static double[] densityRange(FilmBox box) {
+        int minD = box.attrs.getInt(Tag.MinDensity, -1);
+        int maxD = box.attrs.getInt(Tag.MaxDensity, -1);
+        if (minD < 0 && maxD < 0) return null;
+        double minOD = (minD >= 0 ? minD : 0) / 100.0;
+        double maxOD = (maxD >= 0 ? maxD : 300) / 100.0;
+        if (maxOD <= minOD) return null;
+        return new double[] { minOD, maxOD };
+    }
+
     @Override
     public void onPrintJob(FilmBox box, Attributes sessionAttrs, Association as,
                            Attributes presentationLut) {
@@ -51,7 +62,8 @@ public class PrintCoordinator implements PrintScp.PrintJobHandler {
                 Attributes imgData = box.imageData[i];
                 if (imgData == null) continue;
                 try {
-                    cells[i] = PixelRenderer.renderImageBox(imgData, box.color, lut, presentationLut);
+                    double[] density = densityRange(box);
+                cells[i] = PixelRenderer.renderImageBox(imgData, box.color, lut, presentationLut, density);
                 } catch (IOException e) {
                     LOG.error("Cell {} render failed: {}", i + 1, e.toString());
                 }

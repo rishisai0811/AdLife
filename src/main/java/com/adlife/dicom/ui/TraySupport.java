@@ -47,6 +47,9 @@ public class TraySupport {
                 @Override public void actionPerformed(ActionEvent e) { openViewer.run(); }
             });
             add(menu, "Open PDF Folder", openDir(config.pdfDir()));
+            add(menu, "Share Today's PDFs on WhatsApp", new ActionListener() {
+                @Override public void actionPerformed(ActionEvent e) { shareTodaysPdfs(); }
+            });
             add(menu, "Open Archive Folder", openDir(config.archiveDir()));
             add(menu, "Edit Config", new ActionListener() {
                 @Override public void actionPerformed(ActionEvent e) {
@@ -91,6 +94,22 @@ public class TraySupport {
                 openFile(dir);
             }
         };
+    }
+
+    /**
+     * User-initiated share: opens today's dated PDF folder (so the user picks the
+     * files) and launches WhatsApp. Nothing is sent automatically.
+     */
+    private void shareTodaysPdfs() {
+        String day = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date());
+        File dir = new File(config.pdfDir(), day);
+        dir.mkdirs();
+        openFile(dir);
+        try {
+            Desktop.getDesktop().browse(new java.net.URI("whatsapp://send"));
+        } catch (Exception ex) {
+            LOG.warn("WhatsApp not available: {}", ex.toString());
+        }
     }
 
     private static void openFile(File f) {

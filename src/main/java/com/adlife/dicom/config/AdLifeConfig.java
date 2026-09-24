@@ -89,6 +89,13 @@ public class AdLifeConfig {
         sb.append("lut.default.invert=false").append(nl);
         sb.append("# Optional per-calling-AE override: lutmap.<CALLING_AET>=<profile>").append(nl);
         sb.append("#lutmap.CT_CONSOLE=chest").append(nl);
+        sb.append("# Optional TLS on DICOM associations (DICOM PS3.15). Requires a Java keystore").append(nl);
+        sb.append("# with the server certificate: keytool -genkeypair -alias adlife -keyalg RSA").append(nl);
+        sb.append("# -keysize 2048 -keystore adlife.jks -validity 3650").append(nl);
+        sb.append("dicom.tls=false").append(nl);
+        sb.append("dicom.tls.keystore=").append(nl);
+        sb.append("dicom.tls.keystore.password=").append(nl);
+        sb.append("dicom.tls.ciphers=TLS_RSA_WITH_AES_128_CBC_SHA").append(nl);
         sb.append("# Named DICOM destinations for viewer Send and C-MOVE:").append(nl);
         sb.append("# destinations=PACS1:PACS_AE:192.168.1.10:104, WORKSTATION2:AE2:192.168.1.11:105").append(nl);
         sb.append("destinations=").append(nl);
@@ -152,6 +159,14 @@ public class AdLifeConfig {
             }
         }
         return out;
+    }
+
+    public boolean tlsEnabled() { return Boolean.parseBoolean(p.getProperty("dicom.tls", "false")); }
+    public String tlsKeystore() { return p.getProperty("dicom.tls.keystore", "").trim(); }
+    public String tlsKeystorePassword() { return p.getProperty("dicom.tls.keystore.password", ""); }
+    public String[] tlsCiphers() {
+        String v = p.getProperty("dicom.tls.ciphers", "TLS_RSA_WITH_AES_128_CBC_SHA").trim();
+        return v.isEmpty() ? new String[] { "TLS_RSA_WITH_AES_128_CBC_SHA" } : v.split("\\s*,\\s*");
     }
 
     public Destination destinationByAet(String aet) {

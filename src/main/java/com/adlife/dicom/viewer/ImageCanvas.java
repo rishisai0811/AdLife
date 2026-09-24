@@ -168,7 +168,14 @@ public class ImageCanvas extends JComponent {
     private void render() {
         Attributes ds = current();
         if (ds == null) { rendered = null; repaint(); return; }
-        Attributes frame = frameDataset(ds, frameIndex);
+        Attributes frame;
+        if (ds.getValue(Tag.PixelData) instanceof byte[]) {
+            frame = frameDataset(ds, frameIndex); // slice raw multiframe
+        } else {
+            // encapsulated: tag the frame index; PixelRenderer decodes on demand
+            frame = new Attributes(ds);
+            frame.setInt(com.adlife.dicom.imaging.Codecs.TAG_FRAME_INDEX, VR.IS, frameIndex);
+        }
         Attributes overrides = new Attributes();
         if (wlCenter != null) overrides.setDouble(Tag.WindowCenter, VR.DS, wlCenter);
         if (wlWidth != null) overrides.setDouble(Tag.WindowWidth, VR.DS, wlWidth);

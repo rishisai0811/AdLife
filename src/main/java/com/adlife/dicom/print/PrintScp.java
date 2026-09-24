@@ -39,6 +39,7 @@ public class PrintScp extends AbstractDicomService {
     private final Map<String, Attributes> sessions = new HashMap<String, Attributes>();
     private final Map<String, FilmBox> boxes = new HashMap<String, FilmBox>();
     private final Map<String, Attributes> presentationLuts = new HashMap<String, Attributes>();
+    private final Map<String, FilmBox> annotationToBox = new HashMap<String, FilmBox>();
 
     public PrintScp(PrintJobHandler handler, String printerName) {
         // dcm4che's registry dispatches on the command's Affected/Requested
@@ -178,7 +179,9 @@ public class PrintScp extends AbstractDicomService {
             for (int i = 0; i < rqAnnot.size(); i++) {
                 Attributes item = new Attributes();
                 item.setString(Tag.ReferencedSOPClassUID, VR.UI, UID.BasicAnnotationBoxSOPClass);
-                item.setString(Tag.ReferencedSOPInstanceUID, VR.UI, UIDUtils.createUID());
+                String annotUID = UIDUtils.createUID();
+                item.setString(Tag.ReferencedSOPInstanceUID, VR.UI, annotUID);
+                annotationToBox.put(annotUID, box);
                 refAnnot.add(item);
             }
         }
@@ -219,9 +222,16 @@ public class PrintScp extends AbstractDicomService {
             return;
         }
 
-        // Annotation box: accept and ignore content
-        if (data.getString(Tag.AnnotationPosition) != null
-                || data.contains(Tag.AnnotationDisplayFormatID)) {
+        // Annotation box: record position + text for the film sheet renderer
+        if (data.contains(Tag.AnnotationPosition) || data.contains(Tag.TextString)) {
+            FilmBox owner = annotationToBox.get(uid);
+            if (owner != null) {
+                int position = data.getInt(Tag.AnnotationPosition, -1);
+                String text = data.getString(Tag.TextString);
+                if (position >= 0 && text != null && text.trim().length() > 0) {
+                    owner.annotations.put(position, text.trim());
+                }
+            }
             as.tryWriteDimseRSP(pc, Commands.mkNSetRSP(cmd, Status.Success));
             return;
         }

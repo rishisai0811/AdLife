@@ -10,10 +10,9 @@ import org.dcm4che3.data.Tag;
 
 /**
  * Pixel pipeline for print image boxes and local files:
- * raw pixels -> modality rescale -> VOI window -> profile LUT ->
- * Presentation LUT -> polarity -> BufferedImage.
- * Compressed (encapsulated) pixel data is not decoded in v0.1; print traffic
- * from modalities is uncompressed.
+ * pixels (raw or decompressed) -> modality rescale -> VOI window -> profile
+ * LUT -> Presentation LUT (shape or full sequence) -> density calibration ->
+ * polarity -> BufferedImage.
  */
 public final class PixelRenderer {
 
@@ -26,7 +25,8 @@ public final class PixelRenderer {
 
     /** Render one image box cell. imgBoxData is the N-SET dataset of the image box. */
     public static BufferedImage renderImageBox(Attributes imgBoxData, boolean colorExpected,
-                                               byte[] profileLut, Attributes presentationLut)
+                                               byte[] profileLut, Attributes presentationLut,
+                                               double[] densityOD)
             throws IOException {
         Sequence seq = imgBoxData.getSequence(colorExpected
                 ? Tag.BasicColorImageSequence : Tag.BasicGrayscaleImageSequence);
@@ -37,17 +37,25 @@ public final class PixelRenderer {
         Attributes item = seq.get(0);
 
         String polarity = imgBoxData.getString(Tag.Polarity);
-        return renderPixels(item, imgBoxData, polarity, profileLut, presentationLut);
+        return renderPixels(item, imgBoxData, polarity, profileLut, presentationLut, densityOD);
+    }
+
+    /** Back-compat entry (viewer, no density calibration). */
+    public static BufferedImage renderPixels(Attributes pixelHolder, Attributes overrides,
+                                             String polarity, byte[] profileLut,
+                                             Attributes presentationLut) throws IOException {
+        return renderPixels(pixelHolder, overrides, polarity, profileLut, presentationLut, null);
     }
 
     /**
      * Core render. pixelHolder carries Rows/Columns/Bits/PixelData (and window /
      * rescale hints); overrides carries box- or viewer-level overrides (polarity,
-     * window) that win when present.
+     * window) that win when present. densityOD = {minOD, maxOD} for print, or null.
      */
     public static BufferedImage renderPixels(Attributes pixelHolder, Attributes overrides,
                                              String polarity, byte[] profileLut,
-                                             Attributes presentationLut) throws IOException {
+                                             Attributes presentationLut,
+                                             double[] densityOD) throws IOException {
         int rows = pixelHolder.getInt(Tag.Rows, -1);
         int cols = pixelHolder.getInt(Tag.Columns, -1);
         int samples = pixelHolder.getInt(Tag.SamplesPerPixel, 1);
@@ -58,11 +66,22 @@ public final class PixelRenderer {
 
         Object pd = pixelHolder.getValue(Tag.PixelData);
         if (pd == null) throw new UnsupportedImageException("no pixel data");
-        if (pd instanceof Sequence)
-            throw new UnsupportedImageException("compressed pixel data not supported in v0.1");
-        if (!(pd instanceof byte[]))
-            throw new UnsupportedImageException("unexpected pixel data encoding");
-        byte[] px = (byte[]) pd;
+
+        byte[] px;
+        if (pd instanceof byte[]) {
+            px = (byte[]) pd;
+        } else {
+            // encapsulated (compressed) pixel data: decode to raw little-endian
+            String tsuid = pixelHolder.getString(Codecs.TAG_TRANSFER_SYNTAX);
+            if (tsuid == null)
+                throw new UnsupportedImageException("compressed pixel data without transfer syntax");
+            int frame = pixelHolder.getInt(Codecs.TAG_FRAME_INDEX, 0);
+            Codecs.Decoded dec = Codecs.decodeFrame(pixelHolder, tsuid, frame);
+            px = dec.data;
+            bitsAllocated = dec.bitsAllocated;
+            samples = dec.samples;
+            signed = false;
+        }
 
         double slope = pixelHolder.getDouble(Tag.RescaleSlope, 1.0);
         double intercept = pixelHolder.getDouble(Tag.RescaleIntercept, 0.0);
@@ -102,18 +121,54 @@ public final class PixelRenderer {
             center = min + width / 2.0;
         }
 
+        // Full Presentation LUT sequence application (DICOM PS3.3 C.11.6):
+        // P-values index the LUT between firstMappedValue and firstMapped+entries-1.
+        int[] plut = null, plutRange = null; // plutRange = {firstMapped, numEntries, maxOut}
+        if (presentationLut != null) {
+            Sequence pseq = presentationLut.getSequence(Tag.PresentationLUTSequence);
+            if (pseq != null && !pseq.isEmpty()) {
+                Attributes item = pseq.get(0);
+                int[] desc = item.getInts(Tag.LUTDescriptor);
+                byte[] data = item.getBytes(Tag.LUTData);
+                if (desc != null && desc.length == 3 && data != null && desc[0] > 0) {
+                    int entries = desc[0] == 0 ? 65536 : desc[0];
+                    int first = desc[1];
+                    int bits = desc[2] <= 8 ? 8 : 16;
+                    plut = new int[entries];
+                    for (int i = 0; i < entries; i++) {
+                        plut[i] = bits == 8 ? (data[i] & 0xFF)
+                                : ((data[2 * i] & 0xFF) | ((data[2 * i + 1] & 0xFF) << 8));
+                    }
+                    plutRange = new int[] { first, entries, (1 << bits) - 1 };
+                }
+            }
+        }
+
         BufferedImage out = new BufferedImage(cols, rows, BufferedImage.TYPE_BYTE_GRAY);
         byte[] dst = ((DataBufferByte) out.getRaster().getDataBuffer()).getData();
         double low = center - 0.5 - (width - 1) / 2.0;
         double scale = 255.0 / (width - 1);
         boolean invertPolarity = "MONOCHROME1".equalsIgnoreCase(polarity);
-        boolean linOd = isLinOd(presentationLut);
+        boolean linOd = plutRange == null && isLinOd(presentationLut);
 
         for (int i = 0; i < n; i++) {
             int v = (int) Math.round((vals[i] - low) * scale);
             if (v < 0) v = 0; else if (v > 255) v = 255;
             if (profileLut != null) v = profileLut[v] & 0xFF;
-            if (linOd) v = 255 - v;
+            if (plutRange != null) {
+                // v is the windowed P-value normalized to 0..255; scale into the LUT
+                int lutIndex = (int) Math.round(v * (plutRange[1] - 1) / 255.0);
+                if (lutIndex < 0) lutIndex = 0;
+                if (lutIndex >= plutRange[1]) lutIndex = plutRange[1] - 1;
+                v = plut[lutIndex] * 255 / plutRange[2];
+            } else if (linOd) {
+                v = 255 - v;
+            }
+            if (densityOD != null) {
+                // map [0,255] onto [minOD,maxOD] of a 3.0 OD full scale
+                v = (int) Math.round(255.0 * (densityOD[0] + (v / 255.0) * (densityOD[1] - densityOD[0])) / 3.0);
+                if (v < 0) v = 0; else if (v > 255) v = 255;
+            }
             if (invertPolarity) v = 255 - v;
             dst[i] = (byte) v;
         }

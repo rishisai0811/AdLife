@@ -83,10 +83,35 @@ public final class FilmLayout {
                 int y = row * cellH;
                 drawFitted(g, img, x, y, cellW, cellH, interpolation);
             }
+
+            drawAnnotations(g, box, wPx, hPx, dpi);
         } finally {
             g.dispose();
         }
         return sheet;
+    }
+
+    /**
+     * Basic Annotation Box texts (DICOM PS3.3 C.11.4): positions 1..n run along
+     * the top edge of the film, then continue along the bottom edge.
+     */
+    private static void drawAnnotations(Graphics2D g, FilmBox box, int wPx, int hPx, int dpi) {
+        if (box.annotations.isEmpty()) return;
+        int fontH = Math.max(10, (int) Math.round(dpi * 0.14)); // ~0.14in cap height
+        g.setColor(java.awt.Color.WHITE);
+        g.setFont(new java.awt.Font("SansSerif", java.awt.Font.PLAIN, fontH));
+        int half = (box.annotations.size() + 1) / 2;
+        int i = 0;
+        for (java.util.Map.Entry<Integer, String> e : box.annotations.entrySet()) {
+            boolean top = i < half;
+            int slot = top ? i : i - half;
+            int slots = top ? half : box.annotations.size() - half;
+            int x = (int) ((slot + 0.5) * wPx / slots);
+            int y = top ? fontH + 2 : hPx - 4;
+            int tw = g.getFontMetrics().stringWidth(e.getValue());
+            g.drawString(e.getValue(), Math.max(2, x - tw / 2), y);
+            i++;
+        }
     }
 
     private static Object interpolationFor(String magnificationType) {

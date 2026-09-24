@@ -50,6 +50,17 @@ public class DicomServers {
             Connection conn = new Connection();
             conn.setPort(l.port);
             device.addConnection(conn);
+            if (config.tlsEnabled()) {
+                if (config.tlsKeystore().isEmpty()) {
+                    throw new IOException("dicom.tls=true needs dicom.tls.keystore (see config comments)");
+                }
+                device.setKeyStoreURL("file:" + config.tlsKeystore());
+                device.setKeyStoreType("JKS");
+                device.setKeyStorePin(config.tlsKeystorePassword());
+                conn.setTlsProtocols(Connection.DEFAULT_TLS_PROTOCOLS);
+                conn.setTlsCipherSuites(config.tlsCiphers());
+                conn.setTlsNeedClientAuth(false);
+            }
 
             ApplicationEntity ae = new ApplicationEntity(l.aeTitle);
             device.addApplicationEntity(ae);

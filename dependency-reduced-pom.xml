@@ -4,7 +4,7 @@
   <groupId>com.adlife</groupId>
   <artifactId>adlife-dicom</artifactId>
   <name>AdLife DICOM Workstation</name>
-  <version>0.1.0</version>
+  <version>1.0.0</version>
   <description>Open 1:1 alternative to VMS MediPro: DICOM virtual film printer (Print SCP), PDF archiver, mini-PACS and viewer. Runs on Windows XP SP3 through Windows 11 (Java 8+).</description>
   <build>
     <finalName>AdLife</finalName>
