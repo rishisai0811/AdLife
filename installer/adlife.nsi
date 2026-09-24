@@ -9,6 +9,13 @@ SetCompressor /SOLID lzma
 ShowInstDetails show
 
 !include "MUI2.nsh"
+!include "LogicLib.nsh"
+!include "StrFunc.nsh"
+${UnStrStr}
+
+!macro UNPOL group name
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Policies\${group}" "${name}"
+!macroend
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -57,4 +64,23 @@ Section "Uninstall"
   Delete "$DESKTOP\AdLife.lnk"
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AdLife"
   DeleteRegKey HKLM "Software\AdLife"
-      SectionEnd
+  ; Undo anything AdLife itself may have set for this user (v1.1 autostart, kiosk lock).
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "AdLife"
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows NT\CurrentVersion\Winlogon" "Shell"
+  ${If} $0 != ""
+    ${UnStrStr} $2 $0 "AdLife"
+    ${If} $2 != ""
+      DeleteRegValue HKCU "Software\Microsoft\Windows NT\CurrentVersion\Winlogon" "Shell"
+    ${EndIf}
+  ${EndIf}
+  !insertmacro UNPOL "System" "DisableTaskMgr"
+  !insertmacro UNPOL "System" "DisableLockWorkstation"
+  !insertmacro UNPOL "System" "DisableChangePassword"
+  !insertmacro UNPOL "System" "HideFastUserSwitching"
+  !insertmacro UNPOL "Explorer" "NoLogoff"
+  !insertmacro UNPOL "Explorer" "NoClose"
+  !insertmacro UNPOL "Explorer" "NoRun"
+  !insertmacro UNPOL "Explorer" "NoDesktop"
+  !insertmacro UNPOL "Explorer" "NoWinKeys"
+  !insertmacro UNPOL "Explorer" "NoTrayContextMenu"
+SectionEnd
