@@ -39,7 +39,9 @@ its own Java; on other systems any Java 8+ works. No cloud, nothing phones home.
 - **Logs & counters**: print log (CSV), per-size/per-printer counters, app log
   viewer with filter.
 - **Settings screen** with tabs for listeners, printers, routing, film sizes,
-  calibration, header/footer, PDF, licence and kiosk.
+  calibration, header/footer, PDF, licence and kiosk. The Printers tab has an
+  Add-printer wizard (Windows printer list, DICOM AET/IP/port with a C-ECHO
+  connection test, or a folder) and shows how each configured printer resolves.
 - **Backup / restore / rescue** (factory reset keeps a backup first).
 - **Admin password** protecting Settings, Exit, Kiosk and counter reset.
 - **Kiosk mode**: full-screen operator screen (status, counters, recent films,
@@ -130,7 +132,10 @@ testing.
 ## Testing
 
 `--selftest` drives a real DICOM print association against AdLife's own
-listeners. v1.1 was checked with 2x2 grey and colour films through header/footer,
+listeners. v1.2 added the Add-printer wizard and stops silently substituting
+the Windows default printer when a configured printer name is not found (the
+entry stays visible, marked not-found, and jobs to it fail loudly for reprint).
+v1.1 was checked with 2x2 grey and colour films through header/footer,
 layout styles, image adjustment, routing, DICOM forwarding between two
 listeners, PDF compression, job storage and licence metering, and the printed
 films were inspected visually. It has not been tried on a physical Windows XP
