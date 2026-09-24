@@ -116,9 +116,18 @@ public class KioskWindow extends JFrame {
         if (!s.equals(recent.getText())) recent.setText(s);
     }
 
+    /**
+     * Shows the operator screen. Does not touch Windows policies (that only happens
+     * from Settings > Kiosk > Apply Windows lock now). If the window cannot be shown
+     * while AdLife is the Windows shell, Explorer is started so the PC never stays black.
+     */
     public void showFullScreen() {
-        if (cfg.getBool("kiosk.enabled", false)) KioskMode.lock(cfg);
-        GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().setFullScreenWindow(this);
-        setVisible(true);
+        try {
+            GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().setFullScreenWindow(this);
+            setVisible(true);
+        } catch (RuntimeException e) {
+            if (KioskMode.runningAsShell()) KioskMode.startExplorer();
+            throw e;
+        }
     }
 }
