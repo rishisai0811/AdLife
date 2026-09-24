@@ -56,10 +56,16 @@ public class PrintScp extends AbstractDicomService {
         this.printerName = printerName;
     }
 
+    static String metaClass(Association as, PresentationContext pc) {
+        if (pc.getAbstractSyntax() != null) return pc.getAbstractSyntax();
+        PresentationContext rq = as.getAAssociateRQ().getPresentationContext(pc.getPCID());
+        return rq != null ? rq.getAbstractSyntax() : null;
+    }
+
     @Override
     protected void onDimseRQ(Association as, PresentationContext pc, Dimse dimse,
                              Attributes cmd, Attributes data) throws IOException {
-        String sopClass = pc.getAbstractSyntax();
+        String sopClass = metaClass(as, pc);
         switch (dimse) {
         case N_GET_RQ:
             onPrinterGet(as, pc, cmd);
@@ -139,8 +145,9 @@ public class PrintScp extends AbstractDicomService {
         int[] grid = FilmLayout.parseStandardFormat(format);
         int cells = grid[0] * grid[1];
 
-        boolean color = UID.BasicColorPrintManagementMetaSOPClass.equals(
-                pc.getAbstractSyntax());
+        // On the accepting side the A-ASSOCIATE-AC context has no abstract
+        // syntax; the negotiated meta SOP class lives in the request's context.
+        boolean color = UID.BasicColorPrintManagementMetaSOPClass.equals(metaClass(as, pc));
 
         String boxUID = rqUid != null ? rqUid : UIDUtils.createUID();
         String[] imageBoxUIDs = new String[cells];
