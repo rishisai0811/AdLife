@@ -50,10 +50,28 @@ public final class ImageAdjust {
 
     public BufferedImage apply(BufferedImage src) {
         if (src == null || isIdentity()) return src;
-        BufferedImage img = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_RGB);
-        img.getGraphics().drawImage(src, 0, 0, null);
         int[] t = toneCurve();
-        int w = img.getWidth(), h = img.getHeight();
+        int w = src.getWidth(), h = src.getHeight();
+        BufferedImage img;
+        if (src.getType() == BufferedImage.TYPE_BYTE_GRAY) {
+            // Work on the raw grey samples: drawing a TYPE_BYTE_GRAY image into an
+            // RGB one goes through Java's linear-grey colour conversion and lifts
+            // the dark tones, which washes the film out.
+            img = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_GRAY);
+            java.awt.image.Raster in = src.getRaster();
+            java.awt.image.WritableRaster out = img.getRaster();
+            int[] line = new int[w];
+            for (int y = 0; y < h; y++) {
+                in.getSamples(0, y, w, 1, 0, line);
+                for (int x = 0; x < w; x++) line[x] = t[line[x] & 255];
+                out.setSamples(0, y, w, 1, 0, line);
+            }
+            if (soften > 0) img = convolve(img, blurKernel(soften));
+            if (sharpen > 0) img = convolve(img, sharpenKernel(sharpen));
+            return img;
+        }
+        img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        img.getGraphics().drawImage(src, 0, 0, null);
         int[] row = new int[w];
         for (int y = 0; y < h; y++) {
             img.getRGB(0, y, w, 1, row, 0, w);
@@ -82,7 +100,8 @@ public final class ImageAdjust {
     }
 
     private static BufferedImage convolve(BufferedImage img, Kernel k) {
-        BufferedImage out = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB);
+        BufferedImage out = new BufferedImage(img.getWidth(), img.getHeight(),
+                img.getType() == BufferedImage.TYPE_BYTE_GRAY ? BufferedImage.TYPE_BYTE_GRAY : BufferedImage.TYPE_INT_RGB);
         new ConvolveOp(k, ConvolveOp.EDGE_NO_OP, null).filter(img, out);
         return out;
     }
