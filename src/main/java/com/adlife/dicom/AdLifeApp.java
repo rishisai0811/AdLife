@@ -73,6 +73,13 @@ public class AdLifeApp {
                 @Override public void run() { openViewer(config, index); }
             }).restartWith(restart);
             tray.install();
+            // Safety net: if Windows started AdLife as the shell (kiosk.shell) but kiosk
+            // mode is off, there would be no desktop at all - start Explorer instead.
+            boolean asShell = com.adlife.dicom.pro.KioskMode.runningAsShell();
+            if (asShell && !kiosk && !config.getBool("kiosk.enabled", false)) {
+                LOG.warn("AdLife is the Windows shell but kiosk mode is off; starting Explorer");
+                com.adlife.dicom.pro.KioskMode.startExplorer();
+            }
             if (kiosk || config.getBool("kiosk.enabled", false)) {
                 javax.swing.SwingUtilities.invokeLater(new Runnable() {
                     @Override public void run() {
