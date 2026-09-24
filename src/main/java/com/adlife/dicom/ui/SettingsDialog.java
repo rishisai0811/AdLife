@@ -207,7 +207,7 @@ public class SettingsDialog extends JDialog {
         }
         if ("Kiosk".equals(name)) {
             bar.add(button("Apply Windows lock now", new ActionListener() {
-                @Override public void actionPerformed(ActionEvent e) { report(KioskMode.lock(cfg), "Kiosk lock"); }
+                @Override public void actionPerformed(ActionEvent e) { confirmLock(); }
             }));
             bar.add(button("Remove Windows lock", new ActionListener() {
                 @Override public void actionPerformed(ActionEvent e) { report(KioskMode.unlock(cfg), "Kiosk unlock"); }
@@ -229,6 +229,27 @@ public class SettingsDialog extends JDialog {
         }
         p.add(bar, BorderLayout.SOUTH);
         return p;
+    }
+
+    /** Asks before locking Windows down; replacing Explorer needs a second, explicit yes. */
+    private void confirmLock() {
+        String msg = "This applies Windows lock policies for the current Windows user\n"
+                + "(no Run box, no Win key, no log off, hidden desktop icons).\n"
+                + "Use it only on a dedicated print PC. Remove it with \"Remove Windows lock\".\n\nApply now?";
+        if (JOptionPane.showConfirmDialog(this, msg, "Kiosk lock", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
+                != JOptionPane.YES_OPTION) return;
+        if (cfg.getBool("kiosk.shell", false)) {
+            String shell = "kiosk.shell=true: AdLife will REPLACE the Windows desktop (Explorer)\n"
+                    + "for this user from the next logon. There will be no taskbar or Start menu.\n\n"
+                    + "To get the desktop back: AdLife > Exit kiosk (admin password), or\n"
+                    + "Ctrl+Alt+Del > Task Manager > File > Run new task > explorer.exe.\n\n"
+                    + "Replace the Windows desktop with AdLife?";
+            if (JOptionPane.showConfirmDialog(this, shell, "Replace Windows desktop?", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
+                    != JOptionPane.YES_OPTION) {
+                cfg.set("kiosk.shell", "false");
+            }
+        }
+        report(KioskMode.lock(cfg), "Kiosk lock");
     }
 
     private void report(List<String[]> cmds, String what) {
