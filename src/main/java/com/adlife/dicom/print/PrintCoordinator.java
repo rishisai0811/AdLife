@@ -78,8 +78,8 @@ public class PrintCoordinator implements PrintScp.PrintJobHandler {
         info.callingAet = src; info.calledAet = called; info.filmSize = sizeId; info.color = color;
         PrintRouter.Slot slot = svc.router.choose(info);
         PrinterProfile prof = slot != null ? slot.profile : new PrinterProfile(config, 1, "");
-        LOG.info("PRINT > film {} {} {} -> {}", sizeId, landscape ? "LANDSCAPE" : "PORTRAIT",
-                color ? "colour" : "greyscale", slot == null ? "no printer (PDF only)" : prof.label());
+        LOG.info("PRINT > film {} {} {} (box colour={}) -> {}", sizeId, landscape ? "LANDSCAPE" : "PORTRAIT",
+                color ? "colour" : "greyscale", box.color, slot == null ? "no printer (PDF only)" : prof.label());
 
         // LUT: explicit lutmap per console > printer scheme > listener default
         PrinterScheme scheme = config.printerSchemeFor(prof.entry.isEmpty() ? null : prof.entry);
