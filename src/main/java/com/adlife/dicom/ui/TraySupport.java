@@ -30,10 +30,22 @@ public class TraySupport {
     private final DicomServers servers;
     private final Runnable openViewer;
 
+    private Runnable restart;
+
     public TraySupport(AdLifeConfig config, DicomServers servers, Runnable openViewer) {
         this.config = config;
         this.servers = servers;
         this.openViewer = openViewer;
+    }
+
+    public TraySupport restartWith(Runnable r) { this.restart = r; return this; }
+
+    private void swing(final Runnable r) { javax.swing.SwingUtilities.invokeLater(r); }
+
+    public void openSettings() {
+        swing(new Runnable() { @Override public void run() {
+            if (com.adlife.dicom.pro.Security.ask(config, null, "open settings")) new SettingsDialog(config, restart).setVisible(true);
+        } });
     }
 
     public void install() {
@@ -51,9 +63,28 @@ public class TraySupport {
                 @Override public void actionPerformed(ActionEvent e) { shareTodaysPdfs(); }
             });
             add(menu, "Open Archive Folder", openDir(config.archiveDir()));
-            add(menu, "Edit Config", new ActionListener() {
+            add(menu, "Jobs / Reprint", new ActionListener() {
+                @Override public void actionPerformed(ActionEvent e) { swing(new Runnable() { @Override public void run() { new JobsWindow().setVisible(true); } }); }
+            });
+            add(menu, "Logs && Counters".replace("&&", "&"), new ActionListener() {
+                @Override public void actionPerformed(ActionEvent e) { swing(new Runnable() { @Override public void run() { new LogViewer(config).setVisible(true); } }); }
+            });
+            menu.addSeparator();
+            add(menu, "Settings...", new ActionListener() {
+                @Override public void actionPerformed(ActionEvent e) { openSettings(); }
+            });
+            add(menu, "Licence / Recharge...", new ActionListener() {
+                @Override public void actionPerformed(ActionEvent e) { swing(new Runnable() { @Override public void run() { LicenseDialog.open(); } }); }
+            });
+            add(menu, "Kiosk Mode", new ActionListener() {
+                @Override public void actionPerformed(ActionEvent e) { swing(new Runnable() { @Override public void run() {
+                    if (com.adlife.dicom.pro.Security.ask(config, null, "start kiosk mode"))
+                        new KioskWindow(config, servers, new Runnable() { @Override public void run() { new SettingsDialog(config, restart).setVisible(true); } }).showFullScreen();
+                } }); }
+            });
+            add(menu, "Edit Config File", new ActionListener() {
                 @Override public void actionPerformed(ActionEvent e) {
-                    openFile(config.file());
+                    if (com.adlife.dicom.pro.Security.ask(config, null, "edit the config file")) openFile(config.file());
                 }
             });
             menu.addSeparator();
@@ -68,12 +99,20 @@ public class TraySupport {
             });
             menu.addSeparator();
             add(menu, "Exit", new ActionListener() {
-                @Override public void actionPerformed(ActionEvent e) { System.exit(0); }
+                @Override public void actionPerformed(ActionEvent e) {
+                    if (com.adlife.dicom.pro.Security.ask(config, null, "exit AdLife")) System.exit(0);
+                }
             });
 
             TrayIcon icon = new TrayIcon(makeIcon(), "AdLife DICOM", menu);
             icon.setImageAutoSize(true);
             SystemTray.getSystemTray().add(icon);
+            final TrayIcon ti = icon;
+            com.adlife.dicom.pro.Notifier.add(new com.adlife.dicom.pro.Notifier.Listener() {
+                @Override public void notify(String title, String message, boolean warning) {
+                    ti.displayMessage(title, message, warning ? TrayIcon.MessageType.WARNING : TrayIcon.MessageType.INFO);
+                }
+            });
             icon.displayMessage("AdLife DICOM", servers.statusText(),
                     TrayIcon.MessageType.INFO);
         } catch (AWTException e) {
