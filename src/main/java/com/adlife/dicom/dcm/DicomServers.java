@@ -20,9 +20,7 @@ import org.slf4j.LoggerFactory;
 
 import com.adlife.dicom.config.AdLifeConfig;
 import com.adlife.dicom.print.PrintCoordinator;
-import com.adlife.dicom.print.PrintRouter;
 import com.adlife.dicom.print.PrintScp;
-import com.adlife.dicom.pdf.PdfExporter;
 import com.adlife.dicom.store.ArchiveIndex;
 import com.adlife.dicom.store.FindScp;
 import com.adlife.dicom.store.MoveScp;
@@ -42,10 +40,17 @@ public class DicomServers {
 
     public void start(AdLifeConfig config, ArchiveIndex index)
             throws IOException, GeneralSecurityException {
-        PrintRouter router = new PrintRouter(config.printerNames(), config.roundRobin());
-        PdfExporter pdf = new PdfExporter(config.pdfDir());
+        com.adlife.dicom.pro.Services svc = new com.adlife.dicom.pro.Services(config);
+        com.adlife.dicom.pro.Services.setCurrent(svc);
+        boolean anyAet = config.getBool("listen.any.aet", false);
+        List<String> allowCalling = config.getList("listen.allow.calling");
 
+        int count = 0;
         for (AdLifeConfig.Listener l : config.listeners()) {
+            if (++count > 6) {
+                LOG.warn("Only 6 listeners are supported; ignoring {}:{}", l.aeTitle, l.port);
+                continue;
+            }
             Device device = new Device("adlife-" + l.aeTitle.toLowerCase());
             Connection conn = new Connection();
             conn.setPort(l.port);
@@ -62,10 +67,15 @@ public class DicomServers {
                 conn.setTlsNeedClientAuth(false);
             }
 
-            ApplicationEntity ae = new ApplicationEntity(l.aeTitle);
+            // With listen.any.aet=true the listener answers whatever Called AE the
+            // modality uses (the '*' AE is dcm4che's catch-all).
+            ApplicationEntity ae = new ApplicationEntity(anyAet ? "*" : l.aeTitle);
             device.addApplicationEntity(ae);
             ae.addConnection(conn);
             ae.setAssociationAcceptor(true);
+            if (!allowCalling.isEmpty()) {
+                ae.setAcceptedCallingAETitles(allowCalling.toArray(new String[0]));
+            }
 
             for (String cuid : UIDs.PRINT_SOP_CLASSES) {
                 ae.addTransferCapability(new TransferCapability(null, cuid,
@@ -91,8 +101,8 @@ public class DicomServers {
                     TransferCapability.Role.SCP, UIDs.TRANSFER_SYNTAXES));
 
             PrintCoordinator coordinator =
-                    new PrintCoordinator(config, router, pdf, l.lutProfile);
-            String printerLabel = router.hasPrinters() ? "AdLife" : null;
+                    new PrintCoordinator(config, svc, l.lutProfile);
+            String printerLabel = svc.router.hasPrinters() ? "AdLife" : null;
 
             DicomServiceRegistry registry = new DicomServiceRegistry();
             registry.addDicomService(new BasicCEchoSCP());
@@ -111,8 +121,8 @@ public class DicomServers {
 
             device.bindConnections();
             devices.add(device);
-            LOG.info("AdLife listening: AE {} on port {} (LUT profile '{}')",
-                    l.aeTitle, l.port, l.lutProfile);
+            LOG.info("AdLife listening: AE {} on port {} (LUT profile '{}'){}",
+                    l.aeTitle, l.port, l.lutProfile, anyAet ? " - accepting any Called AE" : "");
         }
     }
 

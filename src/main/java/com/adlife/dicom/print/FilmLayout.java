@@ -57,34 +57,69 @@ public final class FilmLayout {
     public static BufferedImage renderSheet(FilmBox box, BufferedImage[] cells, int dpi) {
         double[] size = filmSizeInches(box.attrs.getString(Tag.FilmSizeID));
         boolean landscape = "LANDSCAPE".equalsIgnoreCase(box.attrs.getString(Tag.FilmOrientation));
-        double wIn = landscape ? size[1] : size[0];
-        double hIn = landscape ? size[0] : size[1];
-        int wPx = (int) Math.round(wIn * dpi);
-        int hPx = (int) Math.round(hIn * dpi);
+        Options o = new Options();
+        o.wIn = landscape ? size[1] : size[0];
+        o.hIn = landscape ? size[0] : size[1];
+        return renderSheet(box, cells, dpi, o);
+    }
 
+    /** Layout options (per printer). */
+    public static class Options {
+        public double wIn = 14, hIn = 17;
+        public String style = "normal";     // normal | stretch (= fullpage) | scatter | bordered
+        public double borderMm = 0, gapMm = 0;
+        public boolean whiteBackground = false;
+        public Overlay overlay;             // null = no header/footer
+        public java.util.Map<String, String> tokens;
+    }
+
+    public static BufferedImage renderSheet(FilmBox box, BufferedImage[] cells, int dpi, Options o) {
+        int wPx = (int) Math.round(o.wIn * dpi);
+        int hPx = (int) Math.round(o.hIn * dpi);
         BufferedImage sheet = new BufferedImage(wPx, hPx, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = sheet.createGraphics();
         try {
-            g.setColor(java.awt.Color.BLACK);
+            java.awt.Color bg = o.whiteBackground ? java.awt.Color.WHITE : java.awt.Color.BLACK;
+            g.setColor(bg);
             g.fillRect(0, 0, wPx, hPx);
-
+            int top = o.overlay != null ? o.overlay.headerPx(dpi) : 0;
+            int bottom = o.overlay != null ? o.overlay.footerPx(dpi) : 0;
+            int areaH = hPx - top - bottom;
             int[] grid = parseStandardFormat(box.attrs.getString(Tag.ImageDisplayFormat));
             int cols = grid[0], rows = grid[1];
-            int cellW = wPx / cols;
-            int cellH = hPx / rows;
-
+            int gap = (int) Math.round(o.gapMm / 25.4 * dpi);
+            double bmm = o.borderMm <= 0 && "bordered".equalsIgnoreCase(o.style) ? 1.0 : o.borderMm;
+            int border = (int) Math.round(bmm / 25.4 * dpi);
+            int cellW = (wPx - gap * (cols + 1)) / cols;
+            int cellH = (areaH - gap * (rows + 1)) / rows;
             Object interpolation = interpolationFor(box.attrs.getString(Tag.MagnificationType));
-            for (int pos = 1; pos <= rows * cols; pos++) {
+            boolean stretch = "stretch".equalsIgnoreCase(o.style) || "fullpage".equalsIgnoreCase(o.style);
+            for (int pos = 1; pos <= rows * cols && pos <= cells.length; pos++) {
                 BufferedImage img = cells[pos - 1];
                 if (img == null) continue;
                 int row = (pos - 1) / cols;
                 int col = (pos - 1) % cols;
-                int x = col * cellW;
-                int y = row * cellH;
-                drawFitted(g, img, x, y, cellW, cellH, interpolation);
+                int x = gap + col * (cellW + gap);
+                int y = top + gap + row * (cellH + gap);
+                java.awt.Rectangle r;
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, interpolation);
+                if (stretch) {
+                    g.drawImage(img, x + border, y + border, cellW - 2 * border, cellH - 2 * border, null);
+                    r = new java.awt.Rectangle(x, y, cellW, cellH);
+                } else {
+                    r = drawFitted(g, img, x + border, y + border, cellW - 2 * border, cellH - 2 * border, interpolation);
+                    r.grow(border, border);
+                }
+                if (border > 0) {
+                    g.setColor(o.whiteBackground ? java.awt.Color.BLACK : java.awt.Color.WHITE);
+                    java.awt.Stroke old = g.getStroke();
+                    g.setStroke(new java.awt.BasicStroke(Math.max(1, border / 2f)));
+                    g.drawRect(r.x + border / 4, r.y + border / 4, r.width - border / 2, r.height - border / 2);
+                    g.setStroke(old);
+                }
             }
-
-            drawAnnotations(g, box, wPx, hPx, dpi);
+            drawAnnotations(g, box, wPx, hPx, dpi, top, bottom, o.whiteBackground);
+            if (o.overlay != null) o.overlay.paint(g, wPx, hPx, dpi, o.tokens);
         } finally {
             g.dispose();
         }
@@ -95,10 +130,11 @@ public final class FilmLayout {
      * Basic Annotation Box texts (DICOM PS3.3 C.11.4): positions 1..n run along
      * the top edge of the film, then continue along the bottom edge.
      */
-    private static void drawAnnotations(Graphics2D g, FilmBox box, int wPx, int hPx, int dpi) {
+    private static void drawAnnotations(Graphics2D g, FilmBox box, int wPx, int hPx, int dpi,
+                                        int topOff, int bottomOff, boolean white) {
         if (box.annotations.isEmpty()) return;
         int fontH = Math.max(10, (int) Math.round(dpi * 0.14)); // ~0.14in cap height
-        g.setColor(java.awt.Color.WHITE);
+        g.setColor(white ? java.awt.Color.BLACK : java.awt.Color.WHITE);
         g.setFont(new java.awt.Font("SansSerif", java.awt.Font.PLAIN, fontH));
         int half = (box.annotations.size() + 1) / 2;
         int i = 0;
@@ -107,7 +143,7 @@ public final class FilmLayout {
             int slot = top ? i : i - half;
             int slots = top ? half : box.annotations.size() - half;
             int x = (int) ((slot + 0.5) * wPx / slots);
-            int y = top ? fontH + 2 : hPx - 4;
+            int y = top ? topOff + fontH + 2 : hPx - bottomOff - 4;
             int tw = g.getFontMetrics().stringWidth(e.getValue());
             g.drawString(e.getValue(), Math.max(2, x - tw / 2), y);
             i++;
@@ -123,7 +159,7 @@ public final class FilmLayout {
     }
 
     /** Fit img inside (x,y,w,h) preserving aspect, centered. */
-    private static void drawFitted(Graphics2D g, BufferedImage img, int x, int y,
+    private static java.awt.Rectangle drawFitted(Graphics2D g, BufferedImage img, int x, int y,
                                    int w, int h, Object interpolation) {
         double scale = Math.min((double) w / img.getWidth(), (double) h / img.getHeight());
         int dw = (int) Math.round(img.getWidth() * scale);
@@ -132,5 +168,6 @@ public final class FilmLayout {
         int dy = y + (h - dh) / 2;
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, interpolation);
         g.drawImage(img, dx, dy, dw, dh, null);
+        return new java.awt.Rectangle(dx, dy, dw, dh);
     }
 }

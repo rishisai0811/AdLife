@@ -1,45 +1,83 @@
 # AdLife DICOM Workstation
 
-Open 1:1 alternative to **VMS MediPro DICOM Solution**: a DICOM virtual film
-printer plus mini-PACS and viewer, built for hospitals, diagnostic centers and
-clinics that want dry-film/paper printing instead of expensive laser film.
+A free DICOM film printer, mini-PACS and viewer for hospitals, diagnostic
+centres and clinics that print modality films on ordinary inkjet/laser
+printers or dry film, as an alternative to paid tools such as VMS MediPro.
 
-Runs on **Windows XP SP3 through Windows 11** (any machine with Java 8+).
-One jar, no installer, no cloud.
+Runs on **Windows XP SP3 through Windows 11**. The Windows installer bundles
+its own Java; on other systems any Java 8+ works. No cloud, nothing phones home.
 
 ## What it does
 
-Everything MediPro does:
+**Film printing (DICOM Print SCP)**
+- Receives Basic Grayscale and Color print jobs from CT, MRI, ultrasound, DR/CR,
+  NM and other modalities.
+- Up to **6 listeners** (AE:port), each with its own LUT profile, so each body
+  part or modality can get its own print look. Optional *accept any Called AE*
+  mode and a calling-AE allow list.
+- Up to **6 outputs**: Windows printers, real DICOM film printers
+  (`dicom:AET@host:port`, forwarded as a finished sheet or passed through), or
+  folders (`folder:C:\path`). Round-robin across idle printers.
+- **Routing rules** by listener AE, console AE, film size and colour vs grey.
+- **Film sizes** 8x10 to 14x17 in, A4, A3, B4, Letter and a MANUAL size, with
+  size remapping (for example print 14x17 jobs on A3).
+- **Per-printer calibration**: X/Y offset, scale, fit or edge-to-edge, paper
+  and tray per film size.
+- **Per-printer image adjustment**: brightness, contrast, dark factor, soften,
+  sharpen, invert.
+- **Layout styles**: normal, stretch, scatter (gaps), bordered; black or white
+  background.
+- **Header/footer overlay**: hospital name lines, logos, date/time/AE tokens,
+  brand text and a QR code.
+- Presentation LUT, VOI window, modality rescale, Min/Max Density and
+  MONOCHROME1 polarity honoured; annotation box text printed.
+- **PDF of every film** in a dated folder, with optional compression.
 
-- **DICOM virtual film printer (Print SCP)** - receives Basic Grayscale *and*
-  Color print jobs from CT, MRI, ultrasound, digital X-ray, NM and other
-  modalities, simultaneously on multiple AE titles/ports.
-- **Prints to ordinary Windows printers** - up to 4 printers at once, with
-  round-robin to the next idle printer for fast turnaround.
-- **Linear DICOM LUTs per body part** - route each body part to its own
-  AE:port listener and give that listener its own LUT profile (gamma/invert),
-  MediPro's body-part-wise LUT assignment. VOI windows, modality rescale,
-  Presentation LUT (incl. LIN OD) and MONOCHROME1 polarity are honored.
-- **Automatic high-resolution PDF of every job** - saved to a dated folder,
-  ready to share over WhatsApp/email for instant reporting.
-- **PNDT-suitable film sheets** - standard film sizes (8x10 to 14x17 in,
-  24x24/24x30 cm, A4/A3), portrait/landscape, STANDARD\c,r layouts,
-  magnification filters (REPLICATE/BILINEAR/CUBIC).
+**Operations**
+- **Jobs / Reprint**: every film is kept (default 15 days) with preview; reprint
+  on any printer with any copy count.
+- **Logs & counters**: print log (CSV), per-size/per-printer counters, app log
+  viewer with filter.
+- **Settings screen** with tabs for listeners, printers, routing, film sizes,
+  calibration, header/footer, PDF, licence and kiosk.
+- **Backup / restore / rescue** (factory reset keeps a backup first).
+- **Admin password** protecting Settings, Exit, Kiosk and counter reset.
+- **Kiosk mode**: full-screen operator screen (status, counters, recent films,
+  Reprint); optional Windows lock policies and Explorer replacement for a
+  dedicated print PC. Leaving kiosk needs the admin password.
+- Tray pop-ups when a printer fails or a job is suspended.
 
-And the "extra":
+**Mini-PACS and viewer**
+- C-STORE archive, C-FIND, C-MOVE to named destinations, C-ECHO, optional TLS.
+- Viewer: window/level, zoom/pan, cine, measurements, PNG export, print,
+  DICOM send.
 
-- **Mini-PACS**: C-STORE SCP archive, C-FIND query, C-MOVE relay to named
-  destinations, C-ECHO.
-- **Viewer**: window/level, zoom/pan, cine, calibrated measurements
-  (PixelSpacing), PNG export, Windows print, DICOM send.
-- **System tray app**: status, one-click PDF/archive folders, config editor.
+## Optional licensing (off by default)
 
-## Requirements
+AdLife is free. If you ever want to hand it to other sites on a per-film or
+time-limited basis, it has its own **offline** licensing module. It is
+disabled unless `license.enabled=true`, and it never contacts any server.
 
-- Windows XP SP3 or newer (32/64-bit)
-- Java 8 or newer (on XP: Java 8 from Oracle/AdoptOpenJDK archives; on modern
-  Windows any current JRE/JDK)
-- One or more Windows printers (for hardcopy; PDF archiving works with none)
+- Film-count balances per film size (optionally PDFs too), with low-balance
+  warnings. At zero, jobs are suspended and kept for reprint.
+- Recharge codes and machine-locked licence keys, RSA-signed, one-time use.
+- Optional demo period before a key is required.
+
+Issuing codes (on your own PC; keep the private key there):
+
+```
+AdLife --issuer keys issuer.key                      # prints license.public.key=... for the site config
+AdLife --issuer machine                              # on the site PC: shows its machine ID
+AdLife --issuer recharge issuer.key <machineId> 14X17 500
+AdLife --issuer key issuer.key <machineId> 2027-12-31 "City Care"
+AdLife --issuer apply <configDir> <code>             # apply without the tray (tray: Licence / Recharge)
+```
+
+## Install
+
+Download `AdLife-<version>-Setup.exe` from Releases and run it. It installs
+AdLife with its own 32-bit Java, Start menu shortcuts, tray autostart and an
+uninstaller.
 
 ## Build
 
@@ -47,33 +85,30 @@ And the "extra":
 mvn package
 ```
 
-produces `target/AdLife.jar` (self-contained, all dependencies shaded).
+produces `target/AdLife.jar` (all dependencies shaded).
 
 ## Run
 
 ```
-java -jar target/AdLife.jar            # service + system tray
-java -jar target/AdLife.jar --viewer   # also open the viewer
-java -jar target/AdLife.jar --console  # headless/console logging
+java -jar AdLife.jar                  # service + system tray
+java -jar AdLife.jar --viewer         # also open the viewer
+java -jar AdLife.jar --kiosk          # start in kiosk mode
+java -jar AdLife.jar --console        # headless, console logging
+java -jar AdLife.jar --selftest <configDir> <AE> <port> [color]
+                                      # sends a 2x2 test film to a listener
 ```
 
 ## Setup at the clinic
 
-1. Start AdLife once; it creates `AdLife/adlife.properties` in the user home
+1. Start AdLife once. It creates `AdLife/adlife.properties` in the user home
    and listens as AE `ADLIFE` on port 104.
-2. On each modality console, add a **film printer** destination:
-   host = the AdLife machine's IP, port 104, AE title `ADLIFE`. Print a test
-   film - it lands on the default Windows printer and in `AdLife/PDF/<date>/`.
-3. Edit `adlife.properties` (tray menu > Edit Config) to:
-   - name your real printers (up to 4, round-robin),
-   - add listeners per body part (e.g. `ADLIFE_CT:105:chest, ADLIFE_US:106:soft`)
-     with their own LUT gamma,
-   - add named DICOM destinations for viewer Send and C-MOVE.
-   - bind Windows printers to named per-model schemes (scheme.<NAME> =
-     brand|model|filmSizeId|dpi|minOD|maxOD|gamma|invert, then
-     printer.scheme.<printer name> = <NAME>; presets ship for Fujifilm DryPix,
-     Konica Minolta DryPro, Mindray, Philips and Trimax).
-4. Restart AdLife to apply.
+2. On each modality, add a film printer: host = this PC's IP, port 104,
+   AE `ADLIFE`. Print a test film.
+3. Open tray > Settings to name printers, add listeners, routing, header/footer,
+   calibration and so on. Save restarts the listeners. Every setting is also
+   documented in `adlife.properties`.
+4. Set an admin password (Settings > Listeners > Admin password) before
+   handing the PC to operators.
 
 ## Full codec coverage
 
@@ -92,9 +127,11 @@ on film with pure-Java decoders (XP SP3-safe, no native libraries):
 All pixel-exact or within-lossy-tolerance against reference decoders in
 testing.
 
-## v1.0 limits (honest list)
-- Presentation LUT sequences (LUT descriptor + LUT data) are applied on film and
-  in the viewer; Min/Max Density calibration is applied on film; annotation box
-  text is rendered at its film box position.
-- TLS on DICOM associations is supported but off by default (dicom.tls=true,
-  requires a Java keystore). Default deployments stay on a trusted LAN.
+## Testing
+
+`--selftest` drives a real DICOM print association against AdLife's own
+listeners. v1.1 was checked with 2x2 grey and colour films through header/footer,
+layout styles, image adjustment, routing, DICOM forwarding between two
+listeners, PDF compression, job storage and licence metering, and the printed
+films were inspected visually. It has not been tried on a physical Windows XP
+machine.
