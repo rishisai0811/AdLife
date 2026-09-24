@@ -59,6 +59,8 @@ public class PrintRouter {
             if (service != null) return service.getName();
             return profile.entry.isEmpty() ? "system default" : profile.entry;
         }
+        /** False for a Windows printer entry that no installed printer matched. */
+        public boolean available() { return !profile.isWindows() || service != null; }
         public boolean isBusy() { return busy; }
     }
 
@@ -86,11 +88,14 @@ public class PrintRouter {
                 if (prof.isWindows()) {
                     PrintService match = findByName(all, name);
                     if (match == null) {
-                        LOG.warn("Configured printer '{}' not found; falling back to system default", name);
-                        match = PrintServiceLookup.lookupDefaultPrintService();
+                        // Never substitute another printer: keep the slot visible under its
+                        // configured name, unavailable, so jobs fail loudly instead of
+                        // silently printing somewhere else.
+                        LOG.warn("Printer {} '{}' is not an installed printer on this PC; slot stays unavailable", prof.index, name);
+                        slots.add(new Slot(prof, null));
+                    } else {
+                        slots.add(new Slot(prof, match));
                     }
-                    if (match != null) slots.add(new Slot(prof, match));
-                    else LOG.warn("Printer {} '{}' unavailable (no Windows printer)", prof.index, name);
                 } else {
                     slots.add(new Slot(prof, null));
                 }
@@ -130,7 +135,8 @@ public class PrintRouter {
         StringBuilder sb = new StringBuilder();
         for (Slot s : slots) {
             if (sb.length() > 0) sb.append(", ");
-            sb.append(s.profile.index).append(": ").append(s.name()).append(s.busy ? " (busy)" : " (idle)");
+            sb.append(s.profile.index).append(": ").append(s.name())
+              .append(!s.available() ? " (NOT FOUND on this PC)" : s.busy ? " (busy)" : " (idle)");
         }
         return sb.length() == 0 ? "no printers found" : sb.toString();
     }
@@ -187,7 +193,11 @@ public class PrintRouter {
     public boolean submitTo(final Slot slot, final BufferedImage sheet, final double wIn, final double hIn,
                             final String sizeId, final int copies, final String jobName, final boolean color) {
         if (slot.profile.isFolder()) return toFolder(slot, sheet, sizeId, copies, jobName);
-        if (slot.service == null) return false;
+        if (slot.service == null) {
+            LOG.error("Print job '{}' failed: printer '{}' is not installed on this PC (check Settings > Printers)",
+                    jobName, slot.profile.entry);
+            return false;
+        }
         final PrinterProfile prof = slot.profile;
         final double offX = prof.offXmm(sizeId) / 25.4 * 72, offY = prof.offYmm(sizeId) / 25.4 * 72;
         final double sx = prof.scaleX(sizeId), sy = prof.scaleY(sizeId);
