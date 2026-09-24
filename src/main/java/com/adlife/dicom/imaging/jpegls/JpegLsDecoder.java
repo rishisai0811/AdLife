@@ -21,6 +21,9 @@ public final class JpegLsDecoder {
     // ISO/IEC 14495-1 A.2.1 run-length groups
     private static final int[] J = {0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,5,5,6,6,7,7,8,9,10,11,12,13,14,15};
     private static final int MAX_K = 16;
+    /** JPEG-LS sign(): (n >> 31) | 1 -- +1 for zero, never 0. */
+    private static int signumJls(int n) { return (n >> 31) | 1; }
+    static boolean DEBUG = Boolean.getBoolean("jls.debug");
     private static final int DEFAULT_RESET = 64;
 
     public static Frame decode(byte[] stream) throws IOException {
@@ -98,6 +101,7 @@ public final class JpegLsDecoder {
                     int ilv = readU8();
                     int pt = readU8() & 0xF;
                     if (pt != 0) throw new IOException("point transform not supported");
+                    if (DEBUG) System.err.println("SOS near="+near+" ilv="+ilv+" ns="+ns+" maxval="+maxval+" rst="+restartInterval+" pos="+pos);
                     decodeScan(near, ilv, ns);
                     break;
                 }
@@ -321,6 +325,7 @@ public final class JpegLsDecoder {
 
         private void doLineSample() throws IOException {
             int index = 0;
+            dbgLine++;
             int[] ra = new int[comps], rc = new int[comps], rb = new int[comps], rd = new int[comps];
             int[] qs = new int[comps];
             while (index < width) {
@@ -335,8 +340,10 @@ public final class JpegLsDecoder {
                     if (qs[c] != 0) allZero = false;
                 }
                 if (allZero) {
+                    if (DEBUG) System.err.println("L"+dbgLine+" x"+index+" RUN");
                     index += doRunMode(index, -1); // -1 = all components
                 } else {
+                    if (DEBUG && dbgLine<2) System.err.println("L"+dbgLine+" x"+index+" reg qs="+java.util.Arrays.toString(qs));
                     for (int c = 0; c < comps; c++) {
                         cur[c][index + 1] = doRegular(qs[c], getPredictedValue(ra[c], rb[c], rc[c]));
                     }
@@ -374,6 +381,7 @@ public final class JpegLsDecoder {
             return computeReconstructedSample(predictedValue, errorValue);
         }
 
+        int dbgLine = -1;
         private int doRunMode(int startIndex, int comp) throws IOException {
             int remaining = width - startIndex;
             int index = 0;
@@ -386,7 +394,7 @@ public final class JpegLsDecoder {
             if (index != remaining) {
                 index += (J[runIndex] > 0) ? readValue(J[runIndex]) : 0;
             }
-            if (index > remaining) throw new IOException("invalid JPEG-LS data (run overrun)");
+            if (index > remaining) throw new IOException("invalid JPEG-LS data (run overrun) start="+startIndex+" idx="+index+" rem="+remaining+" pos="+pos);
             // fill run pixels
             if (comp >= 0) {
                 int ra = cur[comp][startIndex]; // current_line_[start_index-1]
@@ -410,7 +418,7 @@ public final class JpegLsDecoder {
                     rx = computeReconstructedSample(ra, err);
                 } else {
                     int err = decodeRunInterruptionError(0);
-                    rx = computeReconstructedSample(rb, err * Integer.signum(rb - ra));
+                    rx = computeReconstructedSample(rb, err * signumJls(rb - ra));
                 }
                 cur[comp][endIndex + 1] = rx;
             } else {
@@ -418,7 +426,7 @@ public final class JpegLsDecoder {
                     int ra = cur[c][startIndex];
                     int rb = prev[c][endIndex + 1];
                     int err = decodeRunInterruptionError(0);
-                    cur[c][endIndex + 1] = computeReconstructedSample(rb, err * Integer.signum(rb - ra));
+                    cur[c][endIndex + 1] = computeReconstructedSample(rb, err * signumJls(rb - ra));
                 }
             }
             runIndex = Math.max(0, runIndex - 1);

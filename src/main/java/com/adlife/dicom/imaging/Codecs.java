@@ -139,6 +139,31 @@ public final class Codecs {
         if (tsuid != null && tsuid.startsWith("1.2.840.10008.1.2.4.5")
                 || UID.JPEGLosslessNonHierarchical14.equals(tsuid)
                 || UID.JPEGLossless.equals(tsuid)) {
+            // 12-bit sequential DCT (SOF0/SOF1): no ImageIO reader handles it -
+            // use our own pure-Java decoder.
+            int sofPrecision = sequentialSofPrecision(stream);
+            if (sofPrecision > 8) {
+                com.adlife.dicom.imaging.jpeg.SeqJpegDecoder.Frame f =
+                        new com.adlife.dicom.imaging.jpeg.SeqJpegDecoder().decode(stream);
+                if (f.width != cols || f.height != rows)
+                    throw new IOException("JPEG geometry mismatch: " + f.width + "x" + f.height);
+                Decoded d = new Decoded();
+                d.bitsAllocated = bits;
+                d.samples = f.components;
+                d.rgb = f.components >= 3;
+                int n = f.width * f.height * f.components;
+                if (bits > 8) {
+                    d.data = new byte[n * 2];
+                    for (int i = 0; i < n; i++) {
+                        d.data[2 * i] = (byte) f.pixels[i];
+                        d.data[2 * i + 1] = (byte) (f.pixels[i] >> 8);
+                    }
+                } else {
+                    d.data = new byte[n];
+                    for (int i = 0; i < n; i++) d.data[i] = (byte) f.pixels[i];
+                }
+                return d;
+            }
             ImageIO.scanForPlugins(); // registers TwelveMonkeys SPIs from the classpath
             java.util.Iterator<ImageReader> jrs = ImageIO.getImageReadersByFormatName("jpeg");
             while (jrs.hasNext()) {
@@ -212,6 +237,22 @@ public final class Codecs {
         }
     }
 
+
+
+    /** Precision (bits per sample) when the stream is sequential DCT (SOF0/SOF1), else -1. */
+    private static int sequentialSofPrecision(byte[] in) {
+        int p = 2; // skip SOI
+        while (p + 4 < in.length) {
+            if ((in[p] & 0xFF) != 0xFF) { p++; continue; }
+            int m = in[p + 1] & 0xFF;
+            if (m == 0xC0 || m == 0xC1) return in[p + 4] & 0xFF;
+            if (m == 0xD8 || m == 0x01 || (m >= 0xD0 && m <= 0xD7)) { p += 2; continue; }
+            if (m == 0xDA || m == 0xD9) return -1;
+            int len = ((in[p + 2] & 0xFF) << 8) | (in[p + 3] & 0xFF);
+            p += 2 + len;
+        }
+        return -1;
+    }
 
     private static byte[] stripJfifApp0(byte[] in) {
         if (in.length > 6 && (in[0] & 0xFF) == 0xFF && (in[1] & 0xFF) == 0xD8
