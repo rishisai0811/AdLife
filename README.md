@@ -69,17 +69,30 @@ java -jar target/AdLife.jar --console  # headless/console logging
    - add listeners per body part (e.g. `ADLIFE_CT:105:chest, ADLIFE_US:106:soft`)
      with their own LUT gamma,
    - add named DICOM destinations for viewer Send and C-MOVE.
+   - bind Windows printers to named per-model schemes (scheme.<NAME> =
+     brand|model|filmSizeId|dpi|minOD|maxOD|gamma|invert, then
+     printer.scheme.<printer name> = <NAME>; presets ship for Fujifilm DryPix,
+     Konica Minolta DryPro, Mindray, Philips and Trimax).
 4. Restart AdLife to apply.
 
-## v1.0 limits (honest list)
+## Full codec coverage
 
-- Compressed pixel data is decoded in the viewer and on film: RLE, JPEG baseline
-  8-bit, JPEG lossless (8/12/16-bit), JPEG-LS lossless and near-lossless, and
-  JPEG 2000 (lossless and lossy) are all supported with pure-Java decoders.
-  Two compressed formats are not decoded yet (clear error instead of an image):
-  JPEG extended sequential 12-bit (1.2.840.10008.1.2.4.51 - no pure-Java decoder
-  exists and the XP SP3 floor forbids native libraries) and JPEG-LS with
-  sample-interleaved color images (rare; grayscale JPEG-LS works fully).
+Every commonly encountered DICOM transfer syntax is decoded in the viewer and
+on film with pure-Java decoders (XP SP3-safe, no native libraries):
+
+- RLE lossless
+- JPEG baseline 8-bit (grayscale and color)
+- JPEG extended sequential 12-bit (1.2.840.10008.1.2.4.51) via AdLife's own
+  sequential DCT decoder
+- JPEG lossless, selection 1 (8/12/16-bit, 1.2.840.10008.1.2.4.57 and .70)
+- JPEG-LS lossless and near-lossless, grayscale and color (including
+  sample-interleaved color), via AdLife's own CharLS decoder
+- JPEG 2000 lossless and lossy (including 12/16-bit)
+
+All pixel-exact or within-lossy-tolerance against reference decoders in
+testing.
+
+## v1.0 limits (honest list)
 - Presentation LUT sequences (LUT descriptor + LUT data) are applied on film and
   in the viewer; Min/Max Density calibration is applied on film; annotation box
   text is rendered at its film box position.

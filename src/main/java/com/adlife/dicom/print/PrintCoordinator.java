@@ -27,6 +27,7 @@ public class PrintCoordinator implements PrintScp.PrintJobHandler {
     private final PrintRouter router;
     private final PdfExporter pdf;
     private final String listenerLutProfile;
+    private LutProfile lutProfile;
 
     public PrintCoordinator(AdLifeConfig config, PrintRouter router, PdfExporter pdf,
                             String listenerLutProfile) {
@@ -52,9 +53,14 @@ public class PrintCoordinator implements PrintScp.PrintJobHandler {
                            Attributes presentationLut) {
         String sourceAet = as != null ? as.getCallingAET() : null;
         try {
+            PrinterScheme scheme = config.printerSchemeFor(router != null ? router.peekNextPrinterName() : null);
             String profileName = config.lutProfileForCallingAet(sourceAet);
+            if (profileName == null && scheme != null) {
+                lutProfile = scheme.toLutProfile();
+                profileName = scheme.name;
+            }
             if (profileName == null) profileName = listenerLutProfile;
-            LutProfile profile = LutProfile.load(config, profileName);
+            LutProfile profile = lutProfile != null ? lutProfile : LutProfile.load(config, profileName);
             byte[] lut = profile.buildLut();
 
             BufferedImage[] cells = new BufferedImage[box.imageBoxUIDs.length];
@@ -63,16 +69,19 @@ public class PrintCoordinator implements PrintScp.PrintJobHandler {
                 if (imgData == null) continue;
                 try {
                     double[] density = densityRange(box);
+                    if (density == null && scheme != null) density = scheme.densityOD();
                 cells[i] = PixelRenderer.renderImageBox(imgData, box.color, lut, presentationLut, density);
                 } catch (IOException e) {
                     LOG.error("Cell {} render failed: {}", i + 1, e.toString());
                 }
             }
 
-            int dpi = config.filmDpi();
+            int dpi = (scheme != null && scheme.dpi > 0) ? scheme.dpi : config.filmDpi();
             BufferedImage sheet = FilmLayout.renderSheet(box, cells, dpi);
 
-            double[] size = FilmLayout.filmSizeInches(box.attrs.getString(Tag.FilmSizeID));
+            String sizeId = box.attrs.getString(Tag.FilmSizeID);
+            if (sizeId == null && scheme != null) sizeId = scheme.filmSizeId;
+            double[] size = FilmLayout.filmSizeInches(sizeId);
             boolean landscape = "LANDSCAPE".equalsIgnoreCase(box.attrs.getString(Tag.FilmOrientation));
             double wIn = landscape ? size[1] : size[0];
             double hIn = landscape ? size[0] : size[1];

@@ -79,6 +79,16 @@ public class AdLifeConfig {
         sb.append("printers=").append(nl);
         sb.append("# true = send each job to the next idle printer in rotation").append(nl);
         sb.append("printer.roundrobin=true").append(nl);
+        sb.append(nl);
+        sb.append("# Printer schemes: per-model calibration presets (MediPro-style).").append(nl);
+        sb.append("# scheme.<NAME> = brand|model|filmSizeId|dpi|minOD|maxOD|gamma|invert").append(nl);
+        sb.append("# Bind a Windows printer to a scheme: printer.scheme.<printer name> = <NAME>").append(nl);
+        sb.append("# Optional global fallback: scheme.default = <NAME>").append(nl);
+        sb.append("scheme.FUJI_DRYPIX=Fujifilm|DryPix 7000||508|0.20|3.00|1.8|false").append(nl);
+        sb.append("scheme.KONICA_DRYPRO=Konica Minolta|DryPro 873||500|0.20|3.00|1.8|false").append(nl);
+        sb.append("scheme.MINDRAY_GENERIC=Mindray|Generic|||0.20|3.00|1.8|false").append(nl);
+        sb.append("scheme.PHILIPS_GENERIC=Philips|Generic|||0.20|3.00|1.8|false").append(nl);
+        sb.append("scheme.TRIMAX_GENERIC=Trimax|Generic|||0.20|3.00|1.8|false").append(nl);
         sb.append("pdf.enabled=true").append(nl);
         sb.append("pdf.dir=").append(new File(dir, "PDF").getAbsolutePath()).append(nl);
         sb.append("archive.dir=").append(new File(dir, "Archive").getAbsolutePath()).append(nl);
@@ -130,6 +140,25 @@ public class AdLifeConfig {
     }
 
     public boolean roundRobin() { return Boolean.parseBoolean(p.getProperty("printer.roundrobin", "true")); }
+
+    /** Scheme bound to a Windows printer name, else the global scheme.default, else null. */
+    public com.adlife.dicom.print.PrinterScheme printerSchemeFor(String printerName) {
+        if (printerName != null) {
+            for (String key : p.stringPropertyNames()) {
+                if (key.startsWith("printer.scheme.")
+                        && key.substring("printer.scheme.".length()).equalsIgnoreCase(printerName.trim())) {
+                    String schemeName = p.getProperty(key).trim();
+                    com.adlife.dicom.print.PrinterScheme sc =
+                            com.adlife.dicom.print.PrinterScheme.parse(schemeName, p.getProperty("scheme." + schemeName));
+                    if (sc != null) return sc;
+                }
+            }
+        }
+        String def = p.getProperty("scheme.default", "").trim();
+        if (!def.isEmpty())
+            return com.adlife.dicom.print.PrinterScheme.parse(def, p.getProperty("scheme." + def));
+        return null;
+    }
     public boolean pdfEnabled() { return Boolean.parseBoolean(p.getProperty("pdf.enabled", "true")); }
     public File pdfDir() { return new File(p.getProperty("pdf.dir", new File(dir, "PDF").getAbsolutePath())); }
     public File archiveDir() { return new File(p.getProperty("archive.dir", new File(dir, "Archive").getAbsolutePath())); }

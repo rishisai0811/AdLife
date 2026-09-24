@@ -88,6 +88,19 @@ public class PrintRouter {
         return sb.length() == 0 ? "no printers found" : sb.toString();
     }
 
+    /** Name of the printer the next submit would pick (no state change), or null. */
+    public synchronized String peekNextPrinterName() {
+        if (slots.isEmpty()) return null;
+        if (roundRobin) {
+            for (int i = 0; i < slots.size(); i++) {
+                PrinterSlot cand = slots.get((rrIndex + i) % slots.size());
+                if (!cand.busy) return cand.configuredName;
+            }
+        }
+        for (PrinterSlot sl : slots) if (!sl.busy) return sl.configuredName;
+        return slots.get(0).configuredName;
+    }
+
     /** Submit one film sheet. Returns the printer name that took the job, or null. */
     public synchronized String submit(final BufferedImage sheet, final double wIn, final double hIn,
                                       final int copies, final String jobName) {
