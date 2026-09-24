@@ -44,7 +44,12 @@ public class AdLifeConfig {
     private final Properties p = new Properties();
 
     public AdLifeConfig() {
-        this.dir = new File(System.getProperty("user.home"), "AdLife");
+        this(new File(System.getProperty("user.home"), "AdLife"));
+    }
+
+    /** Config rooted at an explicit folder (self-test, portable installs). */
+    public AdLifeConfig(File dir) {
+        this.dir = dir;
         this.file = new File(dir, "adlife.properties");
     }
 
@@ -74,7 +79,7 @@ public class AdLifeConfig {
         sb.append("listeners=ADLIFE:104:default").append(nl);
         sb.append("# AE title AdLife uses when it calls out (viewer Send, C-MOVE)").append(nl);
         sb.append("calling.aet=ADLIFE").append(nl);
-        sb.append("# Windows printer names, up to 4, comma separated. Empty = system default.").append(nl);
+        sb.append("# Outputs, up to 6, comma separated: Windows printer name, dicom:AET@host:port, folder:C:\\path. Empty = system default.").append(nl);
         sb.append("# Exact names as shown in Control Panel > Printers.").append(nl);
         sb.append("printers=").append(nl);
         sb.append("# true = send each job to the next idle printer in rotation").append(nl);
@@ -109,6 +114,65 @@ public class AdLifeConfig {
         sb.append("# Named DICOM destinations for viewer Send and C-MOVE:").append(nl);
         sb.append("# destinations=PACS1:PACS_AE:192.168.1.10:104, WORKSTATION2:AE2:192.168.1.11:105").append(nl);
         sb.append("destinations=").append(nl);
+        sb.append("# ---- Listeners (up to 6) ----").append(nl);
+        sb.append("# true = answer any Called AE title (modality AE typos never block printing)").append(nl);
+        sb.append("listen.any.aet=false").append(nl);
+        sb.append("# Only these calling AEs may connect, comma separated (empty = everyone)").append(nl);
+        sb.append("listen.allow.calling=").append(nl);
+        sb.append("# Consoles printed greyscale / whose Presentation LUT is ignored").append(nl);
+        sb.append("mono.aets=").append(nl);
+        sb.append("plut.ignore.aets=").append(nl);
+        sb.append("# ---- Routing: value is printer number 1-6 (0 = off). First match wins in this order ----").append(nl);
+        sb.append("route.all=0").append(nl);
+        sb.append("#route.called.ADLIFE=1").append(nl);
+        sb.append("#route.calling.CT_CONSOLE=2").append(nl);
+        sb.append("#route.size.14INX17IN=1").append(nl);
+        sb.append("route.color=0").append(nl);
+        sb.append("route.grey=0").append(nl);
+        sb.append("# ---- Film sizes ----").append(nl);
+        sb.append("film.sizes.enabled=8INX10IN,10INX12IN,11INX14IN,14INX17IN,A4,A3,B4,LETTER,MANUAL").append(nl);
+        sb.append("film.size.default=14INX17IN").append(nl);
+        sb.append("film.size.fallback=A4").append(nl);
+        sb.append("#film.map.14INX17IN=A3").append(nl);
+        sb.append("film.manual.width.in=8.5").append(nl);
+        sb.append("film.manual.height.in=11").append(nl);
+        sb.append("# ---- Per-printer settings: p<N>.<key>, N = 1..6 ----").append(nl);
+        sb.append("# p1.style=normal|scatter|fullpage|bordered   p1.border.mm  p1.gap.mm  p1.background=black|white").append(nl);
+        sb.append("# p1.brightness=-100..100 p1.contrast=-100..100 p1.darkfactor=0.5..2 p1.soften=0..3 p1.sharpen=0..3 p1.invert=false").append(nl);
+        sb.append("# p1.color=auto|color|grey  p1.overlay=true|false").append(nl);
+        sb.append("# Calibration: p1.offx.mm p1.offy.mm p1.scalex p1.scaley p1.margins=fit|full p1.paper=A3 p1.tray=Tray 2").append(nl);
+        sb.append("# Per film size override: p1.<SIZE>.offx.mm p1.<SIZE>.offy.mm p1.<SIZE>.paper p1.<SIZE>.tray").append(nl);
+        sb.append("# DICOM outputs: p1.dicom.mode=sheet|passthrough p1.dicom.calling=ADLIFE p1.dicom.medium=BLUE FILM p1.dicom.dpi=300").append(nl);
+        sb.append("p1.style=normal").append(nl);
+        sb.append("# ---- Header / footer overlay ----").append(nl);
+        sb.append("overlay.enabled=false").append(nl);
+        sb.append("overlay.header1=").append(nl);
+        sb.append("overlay.header2=").append(nl);
+        sb.append("overlay.footer1={date} {time}  {aet}").append(nl);
+        sb.append("overlay.footer2=").append(nl);
+        sb.append("overlay.header.align=center").append(nl);
+        sb.append("overlay.footer.align=left").append(nl);
+        sb.append("overlay.logo.header=").append(nl);
+        sb.append("overlay.logo.footer=").append(nl);
+        sb.append("overlay.qr=").append(nl);
+        sb.append("# ---- PDF size ----").append(nl);
+        sb.append("pdf.compress=false").append(nl);
+        sb.append("pdf.quality=0.80").append(nl);
+        sb.append("pdf.dpi=150").append(nl);
+        sb.append("pdf.grey=false").append(nl);
+        sb.append("# Keep printed films for reprint (days)").append(nl);
+        sb.append("jobs.keep.days=15").append(nl);
+        sb.append("# ---- Optional licensing (AdLife's own, offline). Off = unlimited free printing ----").append(nl);
+        sb.append("license.enabled=false").append(nl);
+        sb.append("license.metering=true").append(nl);
+        sb.append("license.pdf.metering=false").append(nl);
+        sb.append("license.require.key=false").append(nl);
+        sb.append("license.demo.days=30").append(nl);
+        sb.append("license.remind.below=20").append(nl);
+        sb.append("license.public.key=").append(nl);
+        sb.append("# ---- Kiosk ----").append(nl);
+        sb.append("kiosk.enabled=false").append(nl);
+        sb.append("kiosk.shell=false").append(nl);
         FileOutputStream out = new FileOutputStream(file);
         try {
             out.write(sb.toString().getBytes("UTF-8"));
@@ -204,4 +268,55 @@ public class AdLifeConfig {
         }
         return null;
     }
+
+    // ---- generic typed access (used by the pro features and the Settings UI) ----
+    public Properties raw() { return p; }
+    public String get(String key, String def) {
+        String v = p.getProperty(key);
+        return v == null ? def : v.trim();
+    }
+    public int getInt(String key, int def) {
+        try { return Integer.parseInt(get(key, String.valueOf(def))); } catch (NumberFormatException e) { return def; }
+    }
+    public double getDouble(String key, double def) {
+        try { return Double.parseDouble(get(key, String.valueOf(def))); } catch (NumberFormatException e) { return def; }
+    }
+    public boolean getBool(String key, boolean def) {
+        String v = get(key, null);
+        return v == null || v.isEmpty() ? def : Boolean.parseBoolean(v);
+    }
+    public void set(String key, String value) {
+        if (value == null) p.remove(key); else p.setProperty(key, value);
+    }
+    public List<String> getList(String key) {
+        List<String> out = new ArrayList<String>();
+        for (String s : get(key, "").split(",")) if (s.trim().length() > 0) out.add(s.trim());
+        return out;
+    }
+    /** Writes the current properties back (sorted, comments of the defaults file are not kept). */
+    public synchronized void save() throws IOException {
+        dir.mkdirs();
+        java.util.TreeMap<String, String> sorted = new java.util.TreeMap<String, String>();
+        for (String k : p.stringPropertyNames()) sorted.put(k, p.getProperty(k));
+        StringBuilder sb = new StringBuilder("# AdLife configuration - edit with Settings (tray menu) or by hand\n");
+        Properties esc = new Properties();
+        for (java.util.Map.Entry<String, String> e : sorted.entrySet()) {
+            java.io.StringWriter w = new java.io.StringWriter();
+            esc.clear();
+            esc.setProperty(e.getKey(), e.getValue());
+            esc.store(w, null);
+            for (String line : w.toString().split("\r?\n")) if (!line.startsWith("#")) sb.append(line).append(System.getProperty("line.separator"));
+        }
+        File tmp = new File(dir, "adlife.properties.tmp");
+        FileOutputStream out = new FileOutputStream(tmp);
+        try { out.write(sb.toString().getBytes("ISO-8859-1")); } finally { out.close(); }
+        if (file.exists() && !file.delete()) throw new IOException("cannot replace " + file);
+        if (!tmp.renameTo(file)) throw new IOException("cannot write " + file);
+    }
+    public synchronized void reload() throws IOException {
+        p.clear();
+        load();
+    }
+    public File logsDir() { return new File(dir, "Logs"); }
+    public File jobsDir() { return new File(get("jobs.dir", new File(dir, "Jobs").getAbsolutePath())); }
 }
