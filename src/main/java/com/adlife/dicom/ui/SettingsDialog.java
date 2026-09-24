@@ -187,6 +187,19 @@ public class SettingsDialog extends JDialog {
                 if (k != null && !k.trim().isEmpty()) model.addRow(new Object[] { k.trim(), cfg.get(k.trim(), ""), "" });
             }
         }));
+        if ("Printers".equals(name)) {
+            bar.add(button("Add printer...", new ActionListener() {
+                @Override public void actionPerformed(ActionEvent e) {
+                    PrinterDialog.Choice c = PrinterDialog.showDialog(SettingsDialog.this, cfg);
+                    if (c != null) mergePrinter(model, c);
+                }
+            }));
+            bar.add(button("What is configured now?", new ActionListener() {
+                @Override public void actionPerformed(ActionEvent e) {
+                    showConfiguredPrinters();
+                }
+            }));
+        }
         if ("Licence".equals(name)) {
             bar.add(button("Licence / Recharge...", new ActionListener() {
                 @Override public void actionPerformed(ActionEvent e) { LicenseDialog.open(); }
@@ -222,6 +235,57 @@ public class SettingsDialog extends JDialog {
         String msg = KioskMode.isWindows() ? what + " applied (" + cmds.size() + " policy values). Takes full effect at next logon."
                 : what + ": Windows only; nothing changed on this system.";
         JOptionPane.showMessageDialog(this, msg);
+    }
+
+    /** Append the wizard's entry to the printers row and add its per-printer keys. */
+    private void mergePrinter(DefaultTableModel model, PrinterDialog.Choice c) {
+        int printersRow = -1;
+        String current = "";
+        for (int r = 0; r < model.getRowCount(); r++) {
+            if ("printers".equals(String.valueOf(model.getValueAt(r, 0)).trim())) {
+                printersRow = r;
+                current = String.valueOf(model.getValueAt(r, 1) == null ? "" : model.getValueAt(r, 1)).trim();
+                break;
+            }
+        }
+        List<String> entries = new ArrayList<String>();
+        for (String e2 : current.split(",")) if (!e2.trim().isEmpty()) entries.add(e2.trim());
+        if (entries.size() >= 6) {
+            JOptionPane.showMessageDialog(this, "All 6 printer slots are in use. Remove one from the printers row first.");
+            return;
+        }
+        entries.add(c.entry);
+        int slot = entries.size();
+        StringBuilder sb = new StringBuilder();
+        for (String e2 : entries) { if (sb.length() > 0) sb.append(','); sb.append(e2); }
+        if (printersRow >= 0) model.setValueAt(sb.toString(), printersRow, 1);
+        else model.addRow(new Object[] { "printers", sb.toString(), "" });
+        for (Map.Entry<String, String> prop : c.props.entrySet()) {
+            String key = "p" + slot + "." + prop.getKey();
+            boolean found = false;
+            for (int r = 0; r < model.getRowCount(); r++) {
+                if (key.equals(String.valueOf(model.getValueAt(r, 0)).trim())) {
+                    model.setValueAt(prop.getValue(), r, 1);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) model.addRow(new Object[] { key, prop.getValue(), "" });
+        }
+        JOptionPane.showMessageDialog(this, "Added as printer " + slot + ": " + c.entry
+                + "\nPress Save && Restart Listeners to make it live.".replace("&&", "&"));
+    }
+
+    /** Show how the saved printers list resolves on this PC right now. */
+    private void showConfiguredPrinters() {
+        String text;
+        try {
+            com.adlife.dicom.pro.Services svc = com.adlife.dicom.pro.Services.current();
+            text = svc != null ? svc.router.statusText() : "not available";
+        } catch (Throwable t) {
+            text = "not available: " + t;
+        }
+        JOptionPane.showMessageDialog(this, "Printers as AdLife sees them now:\n" + text);
     }
 
     private void save() {
